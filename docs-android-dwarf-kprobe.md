@@ -838,3 +838,73 @@ adb -s <serial> shell 'su 0 unshare -m sh /data/local/tmp/ko_dwarf_env.sh \
 附件：[gen_traceable.awk](gen_traceable.awk)
 
 附件：[android-ko-dwarf-README.md](android-ko-dwarf-README.md)
+---
+
+## 十二、获取静态链接的 bpftrace
+
+设备上运行的 bpftrace 必须满足三个条件，否则用不起来：
+
+| 要求 | 原因 |
+|------|------|
+| 完全静态链接 | 设备上没有构建机的 glibc/LLVM 共享库 |
+| 无 `PT_INTERP` | 不依赖 `/system/bin/linker64` |
+| 无 `DT_NEEDED` | 不依赖任何 `.so` |
+
+第十节的 `ko_dwarf_env.sh` 对这点要求更严格：它用 chroot 换根，动态链接的程序
+在那里面无法执行（`/system/bin/sh` 就会失败），只有静态二进制能当入口。
+
+### 构建脚本
+
+完整的分步构建系统在本仓库：
+
+```
+static-build/aarch64-gnu/
+```
+
+它从干净的固定版本源码开始，用 `aarch64-linux-gnu-gcc/g++` 交叉编译全部依赖
+（LLVM、bcc、libbpf、elfutils、blazesym、zlib 等），不把任何东西装到
+`/usr` 或 `/usr/aarch64-linux-gnu`。
+
+详细说明见 [static-build/aarch64-gnu/BUILD-zh.md](static-build/aarch64-gnu/BUILD-zh.md)。
+
+### 最小流程
+
+```bash
+# 前置：交叉工具链
+sudo apt install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+cd static-build/aarch64-gnu
+./scripts/build-all.sh
+```
+
+产物是 `prefix/bin/bpftrace`。依赖已编好时，只重新编译 bpftrace 可以走：
+
+```bash
+AARCH64_PREFIX="$PWD/prefix" \
+BPFTRACE_SOURCE_DIR=/path/to/bpftrace \
+BPFTRACE_BUILD_NAME=my-build \
+  ./scripts/09-build-bpftrace.sh
+```
+
+### 产物验证
+
+```bash
+BIN=prefix/bin/bpftrace
+file "$BIN"                                  # ARM aarch64, statically linked
+readelf -d "$BIN"                            # no dynamic section
+! readelf -l "$BIN" | grep -q PT_INTERP
+! readelf -d "$BIN" | grep -Eq 'NEEDED|RPATH|RUNPATH'
+"$BIN" --version
+```
+
+### 推到设备
+
+```bash
+adb -s <serial> push prefix/bin/bpftrace /data/local/tmp/bpftrace-fl
+adb -s <serial> shell chmod 755 /data/local/tmp/bpftrace-fl
+
+# 核对哈希，不要用设备上的旧文件
+HOST_MD5=$(md5sum prefix/bin/bpftrace | awk '{print $1}')
+DEV_MD5=$(adb -s <serial> shell md5sum /data/local/tmp/bpftrace-fl | tr -d '\r' | awk '{print $1}')
+test "$HOST_MD5" = "$DEV_MD5" && echo OK
+```

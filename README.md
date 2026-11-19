@@ -2,7 +2,8 @@
 
 在 Android 上使用 bpftrace 源码行 kprobe（`kprobe@FILE:LINE`）的实测文档与工具脚本。
 
-主内核部分直接可用；内核模块（`.ko`）需要额外处理，本仓库提供了脚本。
+主内核部分直接可用；内核模块（`.ko`）需要额外处理，本仓库提供了脚本。另附
+arm64 完全静态构建 bpftrace 的完整脚本。
 
 ## 内容
 
@@ -12,6 +13,8 @@
 | [ko_dwarf_env.sh](ko_dwarf_env.sh) | 主脚本，用 overlayfs + chroot 让模块 DWARF 可加载 |
 | [gen_traceable.awk](gen_traceable.awk) | 从 `/proc/kallsyms` 生成带模块后缀的函数清单 |
 | [README-ko-dwarf.md](README-ko-dwarf.md) | 模块部分的使用说明，含排查表 |
+| [static-build/aarch64-gnu/](static-build/aarch64-gnu/) | arm64 完全静态构建：从源码编译全部依赖 |
+
 
 ## 快速开始
 

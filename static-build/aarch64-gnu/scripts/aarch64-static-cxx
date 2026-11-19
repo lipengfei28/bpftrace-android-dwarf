@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# Keep this workaround outside the bpftrace source tree.  The upstream
+# STATIC_LINKING block emits -Wl,-Bdynamic for a few system libraries.  For
+# this cross build, remove that linker-state switch and force the final state
+# back to static without editing bpftrace's CMakeLists.txt.
+args=()
+for arg in "$@"; do
+  case "${arg}" in
+    -Wl,-Bdynamic)
+      continue
+      ;;
+  esac
+  args+=("${arg}")
+done
+
+exec /usr/bin/aarch64-linux-gnu-g++ "${args[@]}" -Wl,-Bstatic
